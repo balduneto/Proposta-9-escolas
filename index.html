@@ -519,9 +519,10 @@
             { id: 'c15', produto: "Carrinho de Notebook", qtdPorEscola: 2, vlrAquisicao: 8000.00 },
             { id: 'c16', produto: "Notebook", qtdPorEscola: 73, vlrAquisicao: 6200.00 },
             { id: 'c17', produto: "Caixa de Som", qtdPorEscola: 2, vlrAquisicao: 2000.00 },
-            { id: 'c18', produto: "Kit Artes Circenses", qtdPorEscola: 1, vlrAquisicao: 52800.00 }, // VALOR ALTERADO
+            // ITENS COM LÓGICA DE CÁLCULO ALTERADA
+            { id: 'c18', produto: "Kit Artes Circenses", qtdPorEscola: 1, vlrAquisicao: 52800.00, tipoCalculo: 'porGrupoEscola', grupo: 3 },
             { id: 'c19', produto: "Kit Robótica", qtdPorEscola: 1, vlrAquisicao: 39920.00 },
-            { id: 'c20', produto: "Kit Dança Rítmica", qtdPorEscola: 1, vlrAquisicao: 62400.00 } // VALOR ALTERADO
+            { id: 'c20', produto: "Kit Dança Rítmica", qtdPorEscola: 1, vlrAquisicao: 62400.00, tipoCalculo: 'porGrupoEscola', grupo: 3 }
         ];
 
         // --- REFERÊNCIAS DO DOM - BLOCO 1 ---
@@ -638,6 +639,7 @@
             dadosCapex.forEach(item => {
                 const tr = document.createElement('tr');
                 tr.className = 'capex-item-row';
+                tr.dataset.id = item.id; // Adicionado ID para a lógica de cálculo
                 
                 const vlrBaseAquisicao = parseFloat(item.vlrAquisicao);
 
@@ -658,6 +660,10 @@
                     </td>
                     <td class="px-3 py-3 whitespace-nowrap align-top">
                         <input type="number" min="0" value="${item.qtdPorEscola}" class="capex-qtd-escola table-input">
+                        <!-- Lógica de unidade de cálculo (nova) -->
+                        <span class="text-xs text-gray-500 ml-1">
+                            ${item.tipoCalculo === 'porGrupoEscola' ? `(por ${item.grupo} escolas)` : '(por escola)'}
+                        </span>
                     </td>
                     <td class="px-3 py-3 whitespace-nowrap align-top">
                         <fieldset>
@@ -742,7 +748,7 @@
                 const custoTotalSpan = row.querySelector('.capex-custo-total');
                 const valorBaseInput = row.querySelector('.capex-valor-base-input');
                 const valorBase = parseFloat(valorBaseInput.value) || 0;
-                const qtdPorEscola = parseFloat(qtdPorEscolaInput.value) || 0;
+                const qtd = parseFloat(qtdPorEscolaInput.value) || 0; // Renomeado de qtdPorEscola
                 let valorUnitarioEscolhido = 0;
 
                 if (radioSelecionado.value === 'aquisicao') {
@@ -752,7 +758,21 @@
                     valorUnitarioEscolhido = valorBase * percentual;
                 }
                 
-                const custoTotalItem = qtdPorEscola * valorUnitarioEscolhido * totalEscolas;
+                // --- LÓGICA DE CÁLCULO ATUALIZADA ---
+                const itemId = row.dataset.id;
+                const itemConfig = dadosCapex.find(d => d.id === itemId);
+                let custoTotalItem = 0;
+
+                if (itemConfig && itemConfig.tipoCalculo === 'porGrupoEscola') {
+                    // Nova Lógica: 1 kit para cada 3 escolas
+                    const numGrupos = Math.ceil(totalEscolas / itemConfig.grupo);
+                    custoTotalItem = qtd * valorUnitarioEscolhido * numGrupos;
+                } else {
+                    // Lógica Padrão: por escola
+                    custoTotalItem = qtd * valorUnitarioEscolhido * totalEscolas;
+                }
+                // --- FIM DA LÓGICA ATUALIZADA ---
+                
                 custoTotalSpan.innerText = formatarMoeda(custoTotalItem);
 
                 if (checkbox.checked) {
@@ -1097,7 +1117,8 @@
             doc.setFont('helvetica', 'normal');
             doc.text(`Base de Cálculo: ${capexTotalEscolasEl.innerText} escola(s) selecionada(s).`, 15, y);
             y += 6;
-            const capexHead = [['Produto', 'Qtd p/ Escola', 'Tipo Custo', 'Vlr. Unitário', 'Custo Total']];
+            // PDF: Cabeçalho da tabela atualizado (6 colunas)
+            const capexHead = [['Produto', 'Qtd.', 'Unidade', 'Tipo Custo', 'Vlr. Unitário', 'Custo Total']];
             const capexBody = [];
             const itemRows = capexTabelaItensContainer.querySelectorAll('.capex-item-row');
             itemRows.forEach(row => {
@@ -1110,21 +1131,28 @@
                     const valorBase = parseFloat(row.querySelector('.capex-valor-base-input').value) || 0;
                     let tipoCusto = "N/A";
                     let vlrUnitario = 0;
+                    
+                    // PDF: Lógica para buscar a unidade de cálculo
+                    const itemConfig = dadosCapex.find(d => d.produto === produto);
+                    let unidade = 'por escola';
+                    if (itemConfig && itemConfig.tipoCalculo === 'porGrupoEscola') {
+                        unidade = `por ${itemConfig.grupo} escolas`;
+                    }
 
                     if (radioSelecionado.value === 'aquisicao') {
                         tipoCusto = "Aquisição";
                         vlrUnitario = valorBase;
-                    } else {
-                        const percentual = parseFloat(radioSelecionado.dataset.percentual) || 0.30;
-                        tipoCusto = `Locação (${percentual * 100}%)`;
+                        tipoCusto = `Locação (${(percentual * 100).toFixed(0)}%)`;
                         vlrUnitario = valorBase * percentual;
                     }
                     
-                    capexBody.push([produto, qtd, tipoCusto, formatarMoeda(vlrUnitario), { content: custoTotalLinha, styles: { halign: 'right' } }]);
+                    // PDF: Corpo da tabela atualizado (6 colunas)
+                    capexBody.push([produto, qtd, unidade, tipoCusto, formatarMoeda(vlrUnitario), { content: custoTotalLinha, styles: { halign: 'right' } }]);
                 }
             });
             capexBody.push([
-                { content: 'TOTAL CAPEX (Proposta)', colSpan: 4, styles: { fontStyle: 'bold', fontSize: 10, halign: 'right' } },
+                // PDF: Colspan atualizado para 5
+                { content: 'TOTAL CAPEX (Proposta)', colSpan: 5, styles: { fontStyle: 'bold', fontSize: 10, halign: 'right' } },
                 { content: capexTotalGeralEl.innerText, styles: { fontStyle: 'bold', fontSize: 10, halign: 'right' } }
             ]);
             doc.autoTable({
