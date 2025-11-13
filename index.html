@@ -318,7 +318,7 @@
                         <tr>
                             <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-12">Incluir</th>
                             <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Produto</th>
-                            <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Qtd. por Escola</th>
+                            <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quantidade</th>
                             <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Custo Unitário e Opção</th>
                             <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Custo Total</th>
                         </tr>
@@ -331,7 +331,7 @@
             <!-- Rodapé Explicativo Bloco 3 -->
             <div class="mt-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
                 <p class="text-sm text-gray-600">
-                    <strong>Resumo do Bloco 3:</strong> Este bloco calcula o custo de aquisição (CAPEX). O cálculo multiplica o <strong>Custo Unitário</strong> (seja 100% Aquisição ou % Locação) pela <strong>Quantidade por Escola</strong> e, em seguida, pelo <strong>Total de Escolas</strong> (do Bloco 1), somando todos os itens para obter o custo total.
+                    <strong>Resumo do Bloco 3:</strong> Este bloco calcula o custo de aquisição (CAPEX). O cálculo multiplica o <strong>Custo Unitário</strong> (seja 100% Aquisição ou % Locação) pela <strong>Quantidade</strong> e, em seguida, pela <strong>Base de Cálculo</strong> (Total de Escolas ou Grupos de Escolas), somando todos os itens.
                 </p>
             </div>
         </div>
@@ -650,6 +650,12 @@
                     textoLocacao = 'Locação (50%):';
                 }
                 const vlrBaseLocacao = vlrBaseAquisicao * percentualLocacao;
+                
+                // Lógica da unidade de cálculo (nova)
+                let unidadeLabel = '(por escola)';
+                if (item.tipoCalculo === 'porGrupoEscola') {
+                    unidadeLabel = `(por ${item.grupo} escolas)`;
+                }
 
                 tr.innerHTML = `
                     <td class="px-3 py-3 whitespace-nowrap align-top">
@@ -662,7 +668,7 @@
                         <input type="number" min="0" value="${item.qtdPorEscola}" class="capex-qtd-escola table-input">
                         <!-- Lógica de unidade de cálculo (nova) -->
                         <span class="text-xs text-gray-500 ml-1">
-                            ${item.tipoCalculo === 'porGrupoEscola' ? `(por ${item.grupo} escolas)` : '(por escola)'}
+                           ${unidadeLabel}
                         </span>
                     </td>
                     <td class="px-3 py-3 whitespace-nowrap align-top">
@@ -736,7 +742,7 @@
         }
         
         // --- FUNÇÃO PARA ATUALIZAR CÁLCULOS DO BLOCO 3 (CAPEX) ---
-        function atualizarCapex(totalEscolas) {
+        function atualizarCapex(totalEscolas, totalTurmas) {
             capexTotalEscolasEl.innerText = totalEscolas.toLocaleString('pt-BR');
             let totalCapexGeral = 0;
             const itemRows = capexTabelaItensContainer.querySelectorAll('.capex-item-row');
@@ -905,7 +911,7 @@
             const totalOpexNumerico = atualizarOpex(totalEscolas, totalTurmas); 
             
             // Recalcula Bloco 3
-            const totalCapexNumerico = atualizarCapex(totalEscolas);
+            const totalCapexNumerico = atualizarCapex(totalEscolas, totalTurmas); // Passa totalTurmas
 
             // Recalcula Bloco 4 (que agora chama o Bloco 5 internamente)
             atualizarConsolidacao(totalOpexNumerico, totalCapexNumerico);
@@ -968,7 +974,7 @@
             const turmasStr = totalTurmasEl.innerText.replace(/\./g, '');
             const totalTurmasAtual = parseInt(turmasStr) || 0;
 
-            const totalCapexNumerico = atualizarCapex(totalEscolasAtual);
+            const totalCapexNumerico = atualizarCapex(totalEscolasAtual, totalTurmasAtual); // Passa turmas
             const totalOpexNumerico = parseMoeda(opexTotalAnualEl.innerText); // Pega o valor atual
             atualizarConsolidacao(totalOpexNumerico, totalCapexNumerico); // (Chama o Bloco 5)
         }
@@ -988,18 +994,23 @@
             
             for (let i = 1; i <= pageCount; i++) {
                 doc.setPage(i);
-                doc.setFontSize(14);
+                
+                // Cabeçalho alinhado com o HTML
+                doc.setFontSize(10);
                 doc.setFont('helvetica', 'bold');
-                doc.setTextColor(40, 40, 40);
+                doc.setTextColor(80, 80, 80);
                 let textY = 18;
                 doc.text("Proposta de Parceria - Atividades Complementares (Tempo Integral)", 15, textY);
+                doc.setFontSize(9);
+                doc.setTextColor(0, 107, 137); // Ciano
+                doc.text("Versão Piloto - 9 Escolas", 15, textY + 5);
                 
                 if (logoImg) {
                     try {
-                        const logoHeight = 12;
+                        const logoHeight = 16;
                         const logoWidth = (logoImg.width / logoImg.height) * logoHeight;
                         const logoX = doc.internal.pageSize.getWidth() - 15 - logoWidth;
-                        const logoY = textY - (logoHeight / 2) - 1;
+                        const logoY = textY - 8;
                         doc.addImage(logoImg, 'PNG', logoX, logoY, logoWidth, logoHeight);
                     } catch (e) {
                         console.error("Erro ao adicionar imagem ao PDF: ", e);
@@ -1007,8 +1018,11 @@
                     }
                 }
                 
+                // Linha divisória
                 doc.setLineWidth(0.5);
-                doc.line(15, 28, 195, 28);
+                doc.line(15, 30, 195, 30);
+                
+                // Rodapé
                 doc.setFontSize(8);
                 doc.setTextColor(150, 150, 150);
                 doc.text(`Gerado em: ${dataGeracao}`, 15, 288);
@@ -1036,7 +1050,7 @@
                     ['Total Escolas', 'Total Alunos (Base)', 'Total Turmas', 'Média Alunos/Turma'],
                     [totalEscolasEl.innerText, totalAlunosBaseEl.innerText, totalTurmasEl.innerText, mediaAlunosEl.innerText]
                 ],
-                didDrawPage: () => addHeaderFooterPDF(doc, dataGeracao)
+                didDrawPage: (data) => { if (data.pageNumber === 1) addHeaderFooterPDF(doc, dataGeracao); }
             });
             y = doc.autoTable.previous.finalY + 8;
             doc.autoTable({
@@ -1071,7 +1085,7 @@
                 didDrawPage: () => addHeaderFooterPDF(doc, dataGeracao)
             });
             y = doc.autoTable.previous.finalY + 10;
-            if (y > 200) { doc.addPage(); y = 40; }
+            if (y > 170) { doc.addPage(); y = 40; } // Verificação de espaço para Bloco 2
 
             // --- BLOCO 2: OPEX ---
             doc.setFontSize(14);
@@ -1139,12 +1153,17 @@
                         unidade = `por ${itemConfig.grupo} escolas`;
                     }
 
+                    // *** INÍCIO DA CORREÇÃO DO BUG ***
                     if (radioSelecionado.value === 'aquisicao') {
                         tipoCusto = "Aquisição";
                         vlrUnitario = valorBase;
+                    } else { // Locação
+                        const radioLocacao = row.querySelector('input[value="locacao"]');
+                        const percentual = parseFloat(radioLocacao.dataset.percentual) || 0.30;
                         tipoCusto = `Locação (${(percentual * 100).toFixed(0)}%)`;
                         vlrUnitario = valorBase * percentual;
                     }
+                    // *** FIM DA CORREÇÃO DO BUG ***
                     
                     // PDF: Corpo da tabela atualizado (6 colunas)
                     capexBody.push([produto, qtd, unidade, tipoCusto, formatarMoeda(vlrUnitario), { content: custoTotalLinha, styles: { halign: 'right' } }]);
@@ -1201,7 +1220,7 @@
             });
             
             // FIM DO PDF
-            addHeaderFooterPDF(doc, dataGeracao);
+            addHeaderFooterPDF(doc, dataGeracao); // Adiciona cabeçalho/rodapé na última página
             doc.save('Proposta_Completa_Piloto_9_Escolas_SESI.pdf');
         }
 
@@ -1229,7 +1248,7 @@
                     [{content: 'Total Alunos (Final Estimado)', styles: {fontStyle: 'bold'}} , 
                      {content: totalAlunosFinalEl.innerText, styles: {fontStyle: 'bold', halign: 'right'}}]
                 ],
-                didDrawPage: () => addHeaderFooterPDF(doc, dataGeracao)
+                didDrawPage: (data) => { if (data.pageNumber === 1) addHeaderFooterPDF(doc, dataGeracao); }
             });
             y = doc.autoTable.previous.finalY + 10;
 
@@ -1283,7 +1302,7 @@
             });
            
             // FIM DO PDF
-            addHeaderFooterPDF(doc, dataGeracao);
+            addHeaderFooterPDF(doc, dataGeracao); // Adiciona cabeçalho/rodapé na última página
             doc.save('Resumo_Proposta_Piloto_9_Escolas_SESI.pdf');
         }
 
